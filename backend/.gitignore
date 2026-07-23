@@ -1,0 +1,8 @@
+.env
+data/mindease.db
+data/chroma/
+*.db
+__pycache__/
+*.pyc
+.venv/
+venv/
