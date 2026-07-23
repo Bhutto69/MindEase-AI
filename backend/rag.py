@@ -65,28 +65,44 @@ def ingest_books() -> dict:
     books_path = Path(BOOKS_DIR)
     books_path.mkdir(parents=True, exist_ok=True)
 
-    docs: List = []
     failed = []
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    vs = get_vectorstore()
 
+    total_docs = 0
+    total_chunks = 0
+
+    # One file at a time — keeps peak memory low enough for a small container.
     for p in books_path.rglob("*"):
         if not p.is_file():
             continue
         try:
             if p.suffix.lower() == ".pdf":
-                docs.extend(PyPDFLoader(str(p)).load())
+                file_docs = PyPDFLoader(str(p)).load()
             elif p.suffix.lower() in [".txt", ".md"]:
-                docs.extend(TextLoader(str(p), encoding="utf-8").load())
+                file_docs = TextLoader(str(p), encoding="utf-8").load()
+            else:
+                continue
+
+            total_docs += len(file_docs)
+            chunks = splitter.split_documents(file_docs)
+            total_chunks += len(chunks)
+
+            for i in range(0, len(chunks), 50):
+                vs.add_documents(chunks[i:i + 50])
+
+            print(f"[ingest] {p.name}: {len(chunks)} chunks")
+            del file_docs, chunks
         except Exception as e:
+            print(f"[ingest] FAILED {p.name}: {e}")
             failed.append({"file": str(p), "error": str(e)})
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-    chunks = splitter.split_documents(docs)
-
-    vs = get_vectorstore()
-
-    batch_size = 200
-    for i in range(0, len(chunks), batch_size):
-        vs.add_documents(chunks[i:i + batch_size])
+    return {
+        "files_found": len([p for p in books_path.rglob("*") if p.is_file()]),
+        "documents_loaded": total_docs,
+        "chunks_added": total_chunks,
+        "failed_files": failed,
+    }
 
     return {
         "files_found": len([p for p in books_path.rglob("*") if p.is_file()]),
