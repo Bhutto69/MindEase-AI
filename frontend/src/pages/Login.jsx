@@ -110,20 +110,6 @@ export default function Login({ onLogin }) {
           </p>
         </div>
 
-        <div className={`mb-8 p-5 rounded-2xl border-2 ${isDark ? 'bg-amber-950/30 border-amber-900/50' : 'bg-amber-50 border-amber-200'}`}>
-          <p className={`text-sm font-bold mb-2 ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
-            A final-year student project — not a clinical or emergency service.
-          </p>
-          <p className={`text-sm leading-relaxed ${isDark ? 'text-amber-300/80' : 'text-amber-800'}`}>
-            MindEase is a research prototype and cannot replace professional help.
-            If you're struggling right now, please reach out:
-          </p>
-          <p className={`text-sm font-bold mt-2 leading-relaxed ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
-            Umang (24/7, free): 0311-7786264<br />
-            Emergency (Pakistan): 1122
-          </p>
-        </div>
-
         <div className={`flex p-1 rounded-2xl mb-8 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
           <button type="button" onClick={() => setIsNewUser(true)}
             className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${isNewUser ? (isDark ? 'bg-slate-700 text-indigo-400 shadow-inner' : 'bg-white text-indigo-600 shadow-sm') : 'text-slate-500'}`}>
