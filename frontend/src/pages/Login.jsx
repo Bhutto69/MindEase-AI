@@ -83,7 +83,6 @@ export default function Login({ onLogin }) {
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-6 transition-colors duration-500 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
-
       <button
         type="button"
         onClick={() => setIsDark(!isDark)}
@@ -108,6 +107,20 @@ export default function Login({ onLogin }) {
           </h1>
           <p className={`text-sm mt-2 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             Your personal, anonymous mental health companion.
+          </p>
+        </div>
+
+        <div className={`mb-8 p-5 rounded-2xl border-2 ${isDark ? 'bg-amber-950/30 border-amber-900/50' : 'bg-amber-50 border-amber-200'}`}>
+          <p className={`text-sm font-bold mb-2 ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
+            A final-year student project — not a clinical or emergency service.
+          </p>
+          <p className={`text-sm leading-relaxed ${isDark ? 'text-amber-300/80' : 'text-amber-800'}`}>
+            MindEase is a research prototype and cannot replace professional help.
+            If you're struggling right now, please reach out:
+          </p>
+          <p className={`text-sm font-bold mt-2 leading-relaxed ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
+            Umang (24/7, free): 0311-7786264<br />
+            Emergency (Pakistan): 1122
           </p>
         </div>
 
