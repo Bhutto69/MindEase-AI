@@ -22,3 +22,6 @@ ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
 
 # Optional shared code required to register. Empty = open registration.
 ACCESS_CODE = os.getenv("ACCESS_CODE", "")
+
+# Signs login tokens. Set it in .env so users stay logged in across restarts.
+SECRET_KEY = os.getenv("SECRET_KEY", "")

@@ -1,5 +1,10 @@
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
 
+// Login token from /login and /register, sent on account and admin requests.
+const TOKEN_KEY = "mindease_token";
+const authHeaders = () => ({ "Content-Type": "application/json", "X-Auth-Token": localStorage.getItem(TOKEN_KEY) || "" });
+const saveToken = (data) => { if (data?.token) localStorage.setItem(TOKEN_KEY, data.token); return data; };
+
 /**
  * Send a chat message to the MindEase backend.
  */
@@ -148,7 +153,7 @@ export async function registerUser(sessionId, password, nickname = "", question 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: sessionId, password, nickname, question, answer }),
     });
-    return res.json();
+    return saveToken(await res.json());
   } catch {
     return { ok: false, error: "Could not reach server." };
   }
@@ -160,7 +165,7 @@ export async function loginUser(sessionId, password) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: sessionId, password }),
     });
-    return res.json();   // ← must return the full json
+    return saveToken(await res.json());   // ← must return the full json
   } catch {
     return { ok: false, error: "Could not reach server." };
   }
@@ -258,18 +263,18 @@ export async function sendFeedback(sessionId, rating, comment = "") {
 }
 export async function getAdminStats() {
   try {
-    const res = await fetch(`${BASE_URL}/admin-stats`);
+    const res = await fetch(`${BASE_URL}/admin-stats`, { headers: authHeaders() });
     return res.json();
   } catch { return {}; }
 }
 export async function getAdminExtra() {
-  try { const r = await fetch(`${BASE_URL}/admin-extra`); return r.json(); } catch { return null; }
+  try { const r = await fetch(`${BASE_URL}/admin-extra`, { headers: authHeaders() }); return r.json(); } catch { return null; }
 }
 export async function getAdminUsers() {
-  try { const r = await fetch(`${BASE_URL}/admin-users`); return r.json(); } catch { return { users: [] }; }
+  try { const r = await fetch(`${BASE_URL}/admin-users`, { headers: authHeaders() }); return r.json(); } catch { return { users: [] }; }
 }
 export async function getAdminAssessments() {
-  try { const r = await fetch(`${BASE_URL}/admin-assessments`); return r.json(); } catch { return { assessments: [] }; }
+  try { const r = await fetch(`${BASE_URL}/admin-assessments`, { headers: authHeaders() }); return r.json(); } catch { return { assessments: [] }; }
 }
 export async function changeNickname(sessionId, nickname) {
   try {
@@ -283,15 +288,16 @@ export async function changeNickname(sessionId, nickname) {
 export async function changeUserId(oldId, newId) {
   try {
     const res = await fetch(`${BASE_URL}/change-id`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: authHeaders(),
       body: JSON.stringify({ old_id: oldId, new_id: newId }),
     });
-    return res.json();
+    const data = await res.json();
+    return saveToken(res.ok ? data : { ok: false, error: data.detail });
   } catch { return { ok: false }; }
 }
 
 export async function setSecurity(user_id, question, answer) {
-  try { const r = await fetch(`${BASE_URL}/set-security`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id, question, answer }) }); return r.json(); } catch { return { ok: false }; }
+  try { const r = await fetch(`${BASE_URL}/set-security`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id, question, answer }) }); const d = await r.json(); return r.ok ? d : { ok: false, error: d.detail }; } catch { return { ok: false }; }
 }
 export async function forgotQuestion(user_id) {
   try { const r = await fetch(`${BASE_URL}/forgot-question`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id }) }); return r.json(); } catch { return { ok: false }; }
@@ -337,7 +343,7 @@ export async function saveCheckIn(sessionId, mood) {
 export async function createTestUser(previousId = null) {
   const res = await fetch(`${BASE_URL}/admin-test-user`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ previous_id: previousId }),
   });
   return await res.json();

@@ -61,7 +61,7 @@ User message
 | Backend | FastAPI, Python, SQLite |
 | AI / agents | LangGraph, LangChain, Together AI (gpt-oss-120b) |
 | RAG | Chroma, HuggingFace sentence-transformers |
-| Security | bcrypt password hashing, crisis-safety layer |
+| Security | bcrypt password hashing, signed login tokens, admin-only endpoints, attempt limits on login and recovery, crisis-safety layer |
 
 ## Project structure
 
@@ -101,6 +101,7 @@ TOGETHER_API_KEY=your_together_api_key
 # Optional
 TOGETHER_MODEL=openai/gpt-oss-120b
 ALLOWED_ORIGINS=http://localhost:5173
+SECRET_KEY=any_long_random_string   # signs login tokens
 ```
 
 Start the server:
@@ -131,8 +132,7 @@ Open http://localhost:5173. The frontend talks to `http://localhost:8001` by def
 
 ## Roadmap
 
-- Token-based authentication (JWT) and per-user authorization on every endpoint
-- Rate limiting on login and recovery endpoints
+- Extend token checks from admin and account-settings endpoints to every user endpoint
 - Docker setup for one-command deployment
 
 ## Author

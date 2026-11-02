@@ -1,9 +1,10 @@
 import bcrypt
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Header, HTTPException
 from langchain_together import ChatTogether
 from pydantic import BaseModel
 from typing import List, Optional
 import random, string
+import base64, hashlib, hmac, secrets, time
 
 from rag import ingest_books, answer_with_rag, analyze_conversation
 from safety import is_crisis, crisis_message
@@ -20,7 +21,56 @@ from fastapi.responses import StreamingResponse
 import json as _json
 from questionnaire import QUESTIONNAIRE, KEYS
 from datetime import datetime
-from config import ALLOWED_ORIGINS, ACCESS_CODE, TOGETHER_MODEL
+from config import ALLOWED_ORIGINS, ACCESS_CODE, TOGETHER_MODEL, SECRET_KEY
+
+# ---- Login tokens ----
+# Signed "user_id|expiry" tokens issued at login/register and sent back in the
+# X-Auth-Token header. Without SECRET_KEY a random key is used, so tokens reset
+# whenever the server restarts.
+_TOKEN_KEY = (SECRET_KEY or secrets.token_hex(32)).encode()
+TOKEN_TTL = 7 * 24 * 3600
+
+def make_token(user_id: str) -> str:
+    msg = f"{user_id}|{int(time.time()) + TOKEN_TTL}"
+    sig = hmac.new(_TOKEN_KEY, msg.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{msg}|{sig}".encode()).decode()
+
+def token_user(token: str) -> Optional[str]:
+    try:
+        user_id, exp, sig = base64.urlsafe_b64decode(token.encode()).decode().rsplit("|", 2)
+    except Exception:
+        return None
+    good = hmac.new(_TOKEN_KEY, f"{user_id}|{exp}".encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, good) or int(exp) < time.time():
+        return None
+    return user_id
+
+def current_user(x_auth_token: str = Header(default="")) -> str:
+    user_id = token_user(x_auth_token)
+    if not user_id or not get_user(user_id):
+        raise HTTPException(status_code=401, detail="Please log in again.")
+    return user_id
+
+def require_admin(user_id: str = Depends(current_user)) -> str:
+    if not is_admin_user(user_id):
+        raise HTTPException(status_code=403, detail="Admins only.")
+    return user_id
+
+# ---- Attempt limits ----
+# At most MAX_FAILS wrong passwords/answers per account in LOCK_WINDOW seconds.
+MAX_FAILS = 5
+LOCK_WINDOW = 15 * 60
+_FAILS: dict = {}
+
+def is_locked(user_id: str) -> bool:
+    now = time.time()
+    _FAILS[user_id] = [t for t in _FAILS.get(user_id, []) if now - t < LOCK_WINDOW]
+    return len(_FAILS[user_id]) >= MAX_FAILS
+
+def record_fail(user_id: str):
+    _FAILS.setdefault(user_id, []).append(time.time())
+
+LOCKED = {"ok": False, "error": "Too many attempts. Try again in 15 minutes."}
 
 
 # Message ids cancelled by the user (Stop button), keyed per message so that
@@ -156,9 +206,13 @@ def cancel(payload: CancelIn):
     return {"ok": True}
 
 @app.post("/change-id")
-def change_id(payload: ChangeIdIn):
+def change_id(payload: ChangeIdIn, user_id: str = Depends(current_user)):
+    if user_id != payload.old_id:
+        raise HTTPException(status_code=403, detail="You can only change your own ID.")
     ok = change_user_id(payload.old_id, payload.new_id)
-    return {"ok": ok, "error": "" if ok else "That ID already exists."}
+    if not ok:
+        return {"ok": False, "error": "That ID already exists."}
+    return {"ok": True, "error": "", "token": make_token(payload.new_id)}
 
 @app.get("/health")
 def health():
@@ -336,14 +390,17 @@ def register(payload: RegisterIn):
     create_user(payload.user_id, payload.nickname or "", hash_pw(payload.password))
     if payload.question and payload.answer:
         set_security(payload.user_id, payload.question.strip(), hash_pw(payload.answer.strip().lower()))
-    return {"ok": True, "nickname": payload.nickname or ""}
+    return {"ok": True, "nickname": payload.nickname or "", "token": make_token(payload.user_id)}
 
 @app.post("/login")
 def login(payload: LoginIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     u = get_user(payload.user_id)
     if not u or not check_pw(payload.password, u.get("password_hash", "")):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Invalid Session ID or password."}
-    return {"ok": True, "nickname": u.get("nickname", ""), "is_admin": is_admin_user(payload.user_id), "needs_profile": not bool(get_security_question(payload.user_id)) and not is_admin_user(payload.user_id)}
+    return {"ok": True, "nickname": u.get("nickname", ""), "is_admin": is_admin_user(payload.user_id), "needs_profile": not bool(get_security_question(payload.user_id)) and not is_admin_user(payload.user_id), "token": make_token(payload.user_id)}
 def hash_pw(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
@@ -355,8 +412,11 @@ def check_pw(pw: str, hashed: str) -> bool:
     
 @app.post("/change-password")
 def change_password(payload: ChangePwIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     u = get_user(payload.user_id)
     if not u or not check_pw(payload.old_password, u.get("password_hash", "")):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Current password is incorrect."}
     update_password(payload.user_id, hash_pw(payload.new_password))
     return {"ok": True}
@@ -364,16 +424,22 @@ def change_password(payload: ChangePwIn):
 
 @app.post("/clear-data")
 def clear_data(payload: UserActionIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     u = get_user(payload.user_id)
     if not u or not check_pw(payload.password, u.get("password_hash", "")):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Password is incorrect."}
     clear_user_data(payload.user_id)
     return {"ok": True}
 
 @app.post("/delete-account")
 def delete_account(payload: UserActionIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     u = get_user(payload.user_id)
     if not u or not check_pw(payload.password, u.get("password_hash", "")):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Password is incorrect."}
     delete_user_forever(payload.user_id)
     return {"ok": True}
@@ -427,15 +493,15 @@ def feedback(payload: FeedbackIn):
     save_feedback(payload.user_id, payload.rating, payload.comment)
     return {"ok": True}
 
-@app.get("/admin-stats")
+@app.get("/admin-stats", dependencies=[Depends(require_admin)])
 def admin_stats():
     return get_admin_stats()
 
-@app.get("/admin-users")
+@app.get("/admin-users", dependencies=[Depends(require_admin)])
 def admin_users():
     return {"users": get_all_user_ids()}
 
-@app.get("/admin-assessments")
+@app.get("/admin-assessments", dependencies=[Depends(require_admin)])
 def admin_assessments():
     return {"assessments": get_anon_assessments()}
 
@@ -445,7 +511,7 @@ def change_nickname(payload: NicknameIn):
     return {"ok": True}
 
 
-@app.post("/admin-test-chat")
+@app.post("/admin-test-chat", dependencies=[Depends(require_admin)])
 def admin_test_chat(payload: ChatIn):
     history = [t.model_dump() for t in payload.history] if payload.history else []
     read = analyze_conversation(history + [{"role": "user", "content": payload.message}])
@@ -466,14 +532,14 @@ def admin_test_chat(payload: ChatIn):
         "crisis": crisis_flag,
     }
 
-@app.get("/admin-extra")
+@app.get("/admin-extra", dependencies=[Depends(require_admin)])
 def admin_extra():
     return get_admin_extra()
 
 @app.post("/set-security")
-def set_security_route(payload: SecuritySetIn):
-    if not get_user(payload.user_id):
-        return {"ok": False, "error": "User not found."}
+def set_security_route(payload: SecuritySetIn, user_id: str = Depends(current_user)):
+    if user_id != payload.user_id:
+        raise HTTPException(status_code=403, detail="You can only change your own recovery question.")
     set_security(payload.user_id, payload.question.strip(), hash_pw(payload.answer.strip().lower()))
     return {"ok": True}
 
@@ -486,10 +552,11 @@ def forgot_question(payload: ForgotQIn):
 
 @app.post("/forgot-reset")
 def forgot_reset(payload: ForgotResetIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     h = get_security_hash(payload.user_id)
-    if not h:
-        return {"ok": False, "error": "No recovery set for this ID."}
-    if not check_pw(payload.answer.strip().lower(), h):
+    if not h or not check_pw(payload.answer.strip().lower(), h):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Incorrect answer."}
     pw = payload.new_password
     if len(pw) < 8 or not any(c.isupper() for c in pw) or not any(c.isdigit() for c in pw):
@@ -499,19 +566,25 @@ def forgot_reset(payload: ForgotResetIn):
 
 @app.post("/verify-answer")
 def verify_answer(payload: VerifyAnswerIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     h = get_security_hash(payload.user_id)
     if not h:
         return {"ok": False, "error": "No recovery question set for this account."}
     if not check_pw(payload.answer.strip().lower(), h):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Incorrect answer."}
     return {"ok": True}
 
 @app.post("/secure-action")
 def secure_action(payload: SecureActionIn):
+    if is_locked(payload.user_id):
+        return LOCKED
     h = get_security_hash(payload.user_id)
     if not h:
         return {"ok": False, "error": "No recovery question set for this account."}
     if not check_pw(payload.answer.strip().lower(), h):
+        record_fail(payload.user_id)
         return {"ok": False, "error": "Incorrect answer."}
     if payload.action == "clear":
         clear_user_data(payload.user_id)
@@ -529,7 +602,7 @@ def checkin(payload: CheckInIn):
                   payload.mood == "stressed")
     return {"ok": True}
 
-@app.post("/admin-test-user")
+@app.post("/admin-test-user", dependencies=[Depends(require_admin)])
 def admin_test_user(payload: TestUserIn):
     """Create a throwaway user for admin testing, wiping the previous one."""
     if payload.previous_id and payload.previous_id.startswith("TEST-"):
