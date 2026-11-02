@@ -3,6 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Square, Mic, Image, Paperclip, Sparkles, MoreVertical, AlertCircle } from 'lucide-react';
 import { sendMessage, streamMessage, getHistory, getSessions, getSessionMessages, getReflection, cancelMessage } from '../services/api';
 
+// Show the AI's **bold** and *italic* markdown as styled text instead of raw asterisks.
+function renderInline(text) {
+  return text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((part, i) => {
+    if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>;
+    return part;
+  });
+}
+
 const WELCOME_FIRST_TIME = {
   id: 1,
   role: 'assistant',
@@ -374,7 +383,7 @@ export default function Chat({ darkMode, showCrisis, setShowCrisis, sessionId, v
                 : 'bg-white text-slate-700 border-slate-300 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] rounded-tl-none'
             }`}
           >
-            {msg.content && <p className="text-lg whitespace-pre-wrap">{msg.content}</p>}
+            {msg.content && <p className="text-lg whitespace-pre-wrap">{msg.role === 'assistant' ? renderInline(msg.content) : msg.content}</p>}
             {msg.subtext && (
               <p
                 className={`mt-3 text-sm opacity-70 italic ${
