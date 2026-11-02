@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 import json as _json
 from questionnaire import QUESTIONNAIRE, KEYS
 from datetime import datetime
-from config import ALLOWED_ORIGINS, ACCESS_CODE
+from config import ALLOWED_ORIGINS, ACCESS_CODE, TOGETHER_MODEL
 
 
 # Message ids cancelled by the user (Stop button), keyed per message so that

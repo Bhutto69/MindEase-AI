@@ -5,4 +5,4 @@ data/chroma/
 __pycache__/
 *.pyc
 .venv/
-venv/
+venv/data/books/*.pdf
