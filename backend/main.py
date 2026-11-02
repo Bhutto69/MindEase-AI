@@ -56,6 +56,19 @@ def require_admin(user_id: str = Depends(current_user)) -> str:
         raise HTTPException(status_code=403, detail="Admins only.")
     return user_id
 
+def optional_user(x_auth_token: str = Header(default="")) -> Optional[str]:
+    return token_user(x_auth_token) if x_auth_token else None
+
+def check_owner(user_id: Optional[str], auth: Optional[str]):
+    """Users may only touch their own data. Admins may also use the TEST-
+    accounts they create from the admin panel."""
+    if not user_id or user_id == auth:
+        return
+    if not auth:
+        raise HTTPException(status_code=401, detail="Please log in again.")
+    if not (user_id.startswith("TEST-") and is_admin_user(auth)):
+        raise HTTPException(status_code=403, detail="Not allowed.")
+
 # ---- Attempt limits ----
 # At most MAX_FAILS wrong passwords/answers per account in LOCK_WINDOW seconds.
 MAX_FAILS = 5
@@ -196,10 +209,11 @@ class EndSessionIn(BaseModel):
 
 
 @app.post("/cancel")
-def cancel(payload: CancelIn):
+def cancel(payload: CancelIn, auth: Optional[str] = Depends(optional_user)):
     """User pressed Stop on one specific message. Flag that message id so an
     in-flight /chat call for it won't save its reply, and delete whatever was
     already persisted for it (user message, reply, analysis)."""
+    check_owner(payload.user_id, auth)
     if payload.user_id and payload.msg_id:
         CANCELLED_MSG_IDS.add((payload.user_id, payload.msg_id))
         delete_cancelled_message(payload.user_id, payload.session_id, payload.msg_id)
@@ -225,7 +239,8 @@ def ingest():
 
 
 @app.post("/chat")
-def chat(payload: ChatIn):
+def chat(payload: ChatIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     if payload.user_id:
         save_message(payload.user_id, "user", payload.message, payload.session_id, payload.msg_id)
 
@@ -282,7 +297,8 @@ def chat(payload: ChatIn):
     return result
 
 @app.post("/chat/stream")
-def chat_stream(payload: ChatIn):
+def chat_stream(payload: ChatIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     if payload.user_id:
         save_message(payload.user_id, "user", payload.message,
                      payload.session_id, payload.msg_id)
@@ -328,7 +344,8 @@ def chat_stream(payload: ChatIn):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 @app.post("/analyze")
-def analyze(payload: AnalyzeIn):
+def analyze(payload: AnalyzeIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     history = [t.model_dump() for t in payload.history] if payload.history else []
     result = analyze_conversation(history)
     if payload.user_id:
@@ -336,23 +353,28 @@ def analyze(payload: AnalyzeIn):
     return result
 
 @app.get("/history/{user_id}")
-def history(user_id: str):
+def history(user_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     return {"messages": get_messages(user_id, limit=50)}
 
 @app.get("/analytics/{user_id}")
-def analytics(user_id: str):
+def analytics(user_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     return {"analyses": get_analyses(user_id)}
 
 @app.get("/sessions/{user_id}")
-def sessions(user_id: str):
+def sessions(user_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     return {"sessions": list_sessions(user_id)}
 
 @app.get("/session/{user_id}/{session_id}")
-def session_messages(user_id: str, session_id: str):
+def session_messages(user_id: str, session_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     return {"messages": get_session_messages(user_id, session_id)}
 
 @app.post("/crisis-event")
-def crisis_event(payload: ChatIn):
+def crisis_event(payload: ChatIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     if payload.user_id:
         save_message(payload.user_id, "system", "[User manually opened the crisis support panel]", payload.session_id)
         save_analysis(payload.user_id, "low", ["manually opened crisis support"], True)
@@ -360,7 +382,8 @@ def crisis_event(payload: ChatIn):
     return {"ok": True}
 
 @app.post("/journal")
-def journal_save(payload: JournalIn):
+def journal_save(payload: JournalIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     # crisis check on the entry (gentle handling in the journal)
     crisis_flag = is_crisis(payload.content)
     save_journal(payload.user_id, payload.content, payload.mood)
@@ -374,7 +397,8 @@ def journal_save(payload: JournalIn):
 
 
 @app.get("/journal/{user_id}")
-def journal_list(user_id: str):
+def journal_list(user_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     return {"entries": get_journal(user_id)}
 
 
@@ -445,7 +469,8 @@ def delete_account(payload: UserActionIn):
     return {"ok": True}
 
 @app.get("/reflection/{user_id}")
-def reflection(user_id: str):
+def reflection(user_id: str, auth: Optional[str] = Depends(optional_user)):
+    check_owner(user_id, auth)
     analyses = get_analyses(user_id)
     if not analyses:
         return {"reflection": "You're here, and that matters. Whenever you're ready to share what's on your mind, I'm listening. 💙"}
@@ -483,13 +508,15 @@ def reflection(user_id: str):
     return {"reflection": text}
 
 @app.post("/practice-event")
-def practice_event(payload: PracticeIn):
+def practice_event(payload: PracticeIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     if payload.user_id:
         log_practice(payload.user_id, payload.practice, payload.session_id)
     return {"ok": True}
 
 @app.post("/feedback")
-def feedback(payload: FeedbackIn):
+def feedback(payload: FeedbackIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     save_feedback(payload.user_id, payload.rating, payload.comment)
     return {"ok": True}
 
@@ -506,7 +533,8 @@ def admin_assessments():
     return {"assessments": get_anon_assessments()}
 
 @app.post("/change-nickname")
-def change_nickname(payload: NicknameIn):
+def change_nickname(payload: NicknameIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     set_nickname(payload.user_id, payload.nickname)
     return {"ok": True}
 
@@ -595,7 +623,8 @@ def secure_action(payload: SecureActionIn):
     return {"ok": True}
 
 @app.post("/checkin")
-def checkin(payload: CheckInIn):
+def checkin(payload: CheckInIn, auth: Optional[str] = Depends(optional_user)):
+    check_owner(payload.user_id, auth)
     mapped = {"super": "positive", "happy": "positive",
               "meh": "neutral", "stressed": "low"}.get(payload.mood, "neutral")
     save_analysis(payload.user_id, mapped, ["self check-in"],
@@ -619,8 +648,9 @@ def admin_test_user(payload: TestUserIn):
     return {"ok": True, "user_id": user_id, "password": password, "nickname": nickname}
 
 @app.post("/end-session")
-def end_session(payload: EndSessionIn):
+def end_session(payload: EndSessionIn, auth: Optional[str] = Depends(optional_user)):
     """Summarise a finished conversation — one LLM call, cached forever."""
+    check_owner(payload.user_id, auth)
     from storage import save_session_summary, get_session_summaries
     from rag import summarize_session
 
@@ -639,8 +669,9 @@ def end_session(payload: EndSessionIn):
 
 
 @app.get("/report/{user_id}")
-def report(user_id: str):
+def report(user_id: str, auth: Optional[str] = Depends(optional_user)):
     """Aggregated, patient-owned summary for pre-consultation prep."""
+    check_owner(user_id, auth)
     from storage import get_session_summaries
     analyses = get_analyses(user_id)
     summaries = get_session_summaries(user_id)

@@ -12,7 +12,7 @@ export async function sendMessage(message, history = [], sessionId = null, visit
   try {
     const res = await fetch(`${BASE_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ message, history, user_id: sessionId, session_id: visitSession, msg_id: msgId }),
       signal,
     });
@@ -31,7 +31,7 @@ export async function streamMessage(message, history, sessionId, visitSession,
                                     signal, msgId, onEvent) {
   const res = await fetch(`${BASE_URL}/chat/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ message, history, user_id: sessionId,
                            session_id: visitSession, msg_id: msgId }),
     signal,
@@ -72,7 +72,7 @@ export async function checkHealth() {
 
 export async function getHistory(sessionId) {
   try {
-    const res = await fetch(`${BASE_URL}/history/${sessionId}`);
+    const res = await fetch(`${BASE_URL}/history/${sessionId}`, { headers: authHeaders() });
     if (!res.ok) return { messages: [] };
     return res.json();
   } catch {
@@ -82,7 +82,7 @@ export async function getHistory(sessionId) {
 
 export async function getAnalytics(sessionId) {
   try {
-    const res = await fetch(`${BASE_URL}/analytics/${sessionId}`);
+    const res = await fetch(`${BASE_URL}/analytics/${sessionId}`, { headers: authHeaders() });
     if (!res.ok) return { analyses: [] };
     return res.json();
   } catch {
@@ -92,7 +92,7 @@ export async function getAnalytics(sessionId) {
 
 export async function getSessions(sessionId) {
   try {
-    const res = await fetch(`${BASE_URL}/sessions/${sessionId}`);
+    const res = await fetch(`${BASE_URL}/sessions/${sessionId}`, { headers: authHeaders() });
     if (!res.ok) return { sessions: [] };
     return res.json();
   } catch {
@@ -102,7 +102,7 @@ export async function getSessions(sessionId) {
 
 export async function getSessionMessages(userId, sessId) {
   try {
-    const res = await fetch(`${BASE_URL}/session/${userId}/${sessId}`);
+    const res = await fetch(`${BASE_URL}/session/${userId}/${sessId}`, { headers: authHeaders() });
     if (!res.ok) return { messages: [] };
     return res.json();
   } catch {
@@ -114,7 +114,7 @@ export async function logCrisisEvent(sessionId, visitSession) {
   try {
     await fetch(`${BASE_URL}/crisis-event`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ message: "", user_id: sessionId, session_id: visitSession }),
     });
   } catch {}
@@ -125,7 +125,7 @@ export async function saveJournal(sessionId, content, mood = "") {
   try {
     const res = await fetch(`${BASE_URL}/journal`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, content, mood }),
     });
     if (!res.ok) return { ok: false };
@@ -137,7 +137,7 @@ export async function saveJournal(sessionId, content, mood = "") {
 
 export async function getJournal(sessionId) {
   try {
-    const res = await fetch(`${BASE_URL}/journal/${sessionId}`);
+    const res = await fetch(`${BASE_URL}/journal/${sessionId}`, { headers: authHeaders() });
     if (!res.ok) return { entries: [] };
     return res.json();
   } catch {
@@ -150,7 +150,7 @@ export async function registerUser(sessionId, password, nickname = "", question 
   try {
     const res = await fetch(`${BASE_URL}/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, password, nickname, question, answer }),
     });
     return saveToken(await res.json());
@@ -162,7 +162,7 @@ export async function loginUser(sessionId, password) {
   try {
     const res = await fetch(`${BASE_URL}/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, password }),
     });
     return saveToken(await res.json());   // ← must return the full json
@@ -185,7 +185,7 @@ export async function changePassword(sessionId, oldPassword, newPassword) {
   try {
     const res = await fetch(`${BASE_URL}/change-password`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, old_password: oldPassword, new_password: newPassword }),
     });
     return res.json();
@@ -198,7 +198,7 @@ export async function clearContent(sessionId, password) {
   try {
     const res = await fetch(`${BASE_URL}/clear-data`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, password }),
     });
     return res.json();
@@ -211,7 +211,7 @@ export async function deleteAccount(sessionId, password) {
   try {
     const res = await fetch(`${BASE_URL}/delete-account`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, password }),
     });
     return res.json();
@@ -224,7 +224,7 @@ export async function verifyAnswer(sessionId, answer) {
   try {
     const res = await fetch(`${BASE_URL}/verify-answer`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, answer }),
     });
     return res.json();
@@ -235,7 +235,7 @@ export async function verifyAnswer(sessionId, answer) {
 
 export async function getReflection(sessionId) {
   try {
-    const res = await fetch(`${BASE_URL}/reflection/${sessionId}`);
+    const res = await fetch(`${BASE_URL}/reflection/${sessionId}`, { headers: authHeaders() });
     if (!res.ok) return { reflection: "" };
     return res.json();
   } catch {
@@ -246,7 +246,7 @@ export async function logPractice(sessionId, practice, visitSession = null) {
   try {
     await fetch(`${BASE_URL}/practice-event`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, practice, session_id: visitSession }),
     });
   } catch {}
@@ -255,7 +255,7 @@ export async function sendFeedback(sessionId, rating, comment = "") {
   try {
     const res = await fetch(`${BASE_URL}/feedback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, rating, comment }),
     });
     return res.json();
@@ -279,7 +279,7 @@ export async function getAdminAssessments() {
 export async function changeNickname(sessionId, nickname) {
   try {
     const res = await fetch(`${BASE_URL}/change-nickname`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, nickname }),
     });
     return res.json();
@@ -300,17 +300,17 @@ export async function setSecurity(user_id, question, answer) {
   try { const r = await fetch(`${BASE_URL}/set-security`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id, question, answer }) }); const d = await r.json(); return r.ok ? d : { ok: false, error: d.detail }; } catch { return { ok: false }; }
 }
 export async function forgotQuestion(user_id) {
-  try { const r = await fetch(`${BASE_URL}/forgot-question`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id }) }); return r.json(); } catch { return { ok: false }; }
+  try { const r = await fetch(`${BASE_URL}/forgot-question`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id }) }); return r.json(); } catch { return { ok: false }; }
 }
 export async function forgotReset(user_id, answer, new_password) {
-  try { const r = await fetch(`${BASE_URL}/forgot-reset`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id, answer, new_password }) }); return r.json(); } catch { return { ok: false }; }
+  try { const r = await fetch(`${BASE_URL}/forgot-reset`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ user_id, answer, new_password }) }); return r.json(); } catch { return { ok: false }; }
 }
 
 export async function secureAction(sessionId, answer, action) {
   try {
     const res = await fetch(`${BASE_URL}/secure-action`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, answer, action }),
     });
     return res.json();
@@ -322,7 +322,7 @@ export async function cancelMessage(sessionId, visitSession, msgId) {
   try {
     const res = await fetch(`${BASE_URL}/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({ user_id: sessionId, session_id: visitSession, msg_id: msgId }),
     });
     return res.json();
@@ -334,7 +334,7 @@ export async function cancelMessage(sessionId, visitSession, msgId) {
 export async function saveCheckIn(sessionId, mood) {
   const res = await fetch(`${BASE_URL}/checkin`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ user_id: sessionId, mood }),
   });
   return await res.json();
@@ -352,13 +352,13 @@ export async function createTestUser(previousId = null) {
 export async function endSession(sessionId, visitSession) {
   const res = await fetch(`${BASE_URL}/end-session`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ user_id: sessionId, session_id: visitSession }),
   });
   return await res.json();
 }
 
 export async function getReport(sessionId) {
-  const res = await fetch(`${BASE_URL}/report/${sessionId}`);
+  const res = await fetch(`${BASE_URL}/report/${sessionId}`, { headers: authHeaders() });
   return await res.json();
 }

@@ -61,7 +61,7 @@ User message
 | Backend | FastAPI, Python, SQLite |
 | AI / agents | LangGraph, LangChain, Together AI (gpt-oss-120b) |
 | RAG | Chroma, HuggingFace sentence-transformers |
-| Security | bcrypt password hashing, signed login tokens, admin-only endpoints, attempt limits on login and recovery, crisis-safety layer |
+| Security | bcrypt password hashing, signed login tokens checked on every user endpoint, admin-only endpoints, attempt limits on login and recovery, crisis-safety layer |
 
 ## Project structure
 
@@ -132,7 +132,6 @@ Open http://localhost:5173. The frontend talks to `http://localhost:8001` by def
 
 ## Roadmap
 
-- Extend token checks from admin and account-settings endpoints to every user endpoint
 - Docker setup for one-command deployment
 
 ## Author
