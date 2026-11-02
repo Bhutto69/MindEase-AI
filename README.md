@@ -136,5 +136,5 @@ Open http://localhost:5173. The frontend talks to `http://localhost:8001` by def
 
 ## Author
 
-**Aamer Azeem** · BS Computer Science, University of Management and Technology (UMT), Lahore
+**Aamer Azeem** 
 GitHub: [@Bhutto69](https://github.com/Bhutto69)
